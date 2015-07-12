@@ -33,13 +33,15 @@ func read_file() {
 
 
 func main() {   
-    filenames := make([]string, len(os.Args) -1)
+    // filename -> algorithm -> checksum
+    output_map :=  map[string]map[string]string{}
+
     for i := 0; i < len(os.Args) -1; i++ {
-        filenames[i] = os.Args[i+1]
+         output_map[os.Args[i+1]] = make(map[string]string)
     }
     fmt.Println("Files:")
-    for i := 0; i < len(filenames); i++ {
-        fmt.Printf("%d: %s\n", i, filenames[i])
+    for key, _ := range output_map {
+        fmt.Printf("- %s\n", key)
     }
 
     // open file, exit on error:
