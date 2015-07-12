@@ -14,23 +14,46 @@ import (
     "crypto/sha256"
     "encoding/hex"
     "fmt"
+    "hash"
     "io"
     "os"
 )
 
-func read_file() {
-    /*  reads from file, duplicates into 
-        channels feeding into calculation
-        go-routines */
+
+type file_alg_sum struct {
+    filename, alg, cksum string
+}
+
+func new_hash(alg string) hash.Hash {
+    if alg == "SHA256" {
+        return sha256.New()
+    } else {
+        panic ("Unknown algorithm!")
+    }
 }
 
 
-// func calc(chan input, string alg) {
-//     /*  reads chunks of data from
-//         input channel and feeds then
-//         into specified cksum-algorithm */
-// }
+func chan_to_hash(ic chan byte, file string, alg string, oc chan file_alg_sum) {
+    hash_func := new_hash(alg)
+    i := 0
+    cnt := 0
+    data := make ([]byte, 16)
 
+    for nibble := range ic {
+        data[i] = nibble
+        i++
+        if i == 16 {
+            hash_func.Write(data)
+            i = 0
+        }
+        if cnt % 1024 == 0 {
+            fmt.Printf("chan_to_hash(): Wrote nibble %d\n", cnt)
+        }
+        cnt++
+    }
+    
+    oc <- file_alg_sum{file, alg, hex.EncodeToString(hash_func.Sum(nil))}
+}
 
 func main() {   
     // filename -> algorithm -> checksum
@@ -55,9 +78,10 @@ func main() {
         // create a buffer to keep chunks that are read
         data := make([]byte, 16)
 
-        // initialize hash-func:
-        hash := sha256.New()
-
+        ic := make(chan byte, 16)
+        oc := make(chan file_alg_sum, 1)
+        go chan_to_hash(ic, filename, "SHA256", oc)
+        cnt := 0
         for {
             // read chunks from file:
             num_bytes, err := input_file.Read(data)
@@ -65,10 +89,21 @@ func main() {
             if err != nil && err != io.EOF { panic(err) }
             // break loop if no more bytes:
             if num_bytes == 0 { break }       
-            // write data read to hashing function:
-            hash.Write(data)
+            // write data read to channel:
+            if cnt % 1024 == 0 {
+                fmt.Printf("main(): Sending chunk %d\n", cnt)
+            }
+            for nibble := range data {
+                ic <- byte(nibble)
+            }
+            cnt++
         }
-        alg_sum["SHA256"] = hex.EncodeToString(hash.Sum(nil))
+        close(ic)
+        for result := range oc {
+            fmt.Printf("oc returns %s for %s of\n%s", 
+                result.alg, filename, result.cksum)
+            alg_sum[result.alg] = result.cksum
+        }
     }
 
     for filename, alg_sum := range output_map {
