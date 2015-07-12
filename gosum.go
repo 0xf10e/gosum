@@ -39,35 +39,42 @@ func main() {
     for i := 0; i < len(os.Args) -1; i++ {
          output_map[os.Args[i+1]] = make(map[string]string)
     }
-    fmt.Println("Files:")
-    for key, _ := range output_map {
-        fmt.Printf("- %s\n", key)
+
+    for filename, alg_sum := range output_map {
+        // open file, exit on error:
+        input_file, err := os.Open(filename)
+        if err != nil {
+            fmt.Println(err)
+            return
+        } else {
+            fmt.Printf(" * Opened %s\n", filename)
+        }
+        // close on EOF I guess?
+        defer input_file.Close()
+
+        // create a buffer to keep chunks that are read
+        data := make([]byte, 16)
+
+        // initialize hash-func:
+        hash := sha256.New()
+
+        for {
+            // read chunks from file:
+            num_bytes, err := input_file.Read(data)
+            // panic on any error != io.EOF
+            if err != nil && err != io.EOF { panic(err) }
+            // break loop if no more bytes:
+            if num_bytes == 0 { break }       
+            // write data read to hashing function:
+            hash.Write(data)
+        }
+        alg_sum["SHA256"] = hex.EncodeToString(hash.Sum(nil))
     }
 
-    // open file, exit on error:
-    input_file, err := os.Open(os.Args[1])
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-    // close on EOF I guess?
-    defer input_file.Close()
-
-    // create a buffer to keep chunks that are read
-    data := make([]byte, 16)
-
-    // initialize hash-func:
-    hash := sha256.New()
-
-    for {
-        // read chunks from file:
-        num_bytes, err := input_file.Read(data)
-        // panic on any error != io.EOF
-        if err != nil && err != io.EOF { panic(err) }
-        // break loop if no more bytes:
-        if num_bytes == 0 { break }       
-        // write data read to hashing function:
-        hash.Write(data)
-    }
-    fmt.Println(hex.EncodeToString(hash.Sum(nil)))
+    for filename, alg_sum := range output_map {
+        fmt.Printf("%s: \n", filename)
+        for alg, cksum := range alg_sum {
+            fmt.Printf(" - %s: %s\n", alg, cksum)
+        }
+    }   
 }
