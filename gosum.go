@@ -33,12 +33,14 @@ func read_file() {
 
 
 func main() {   
-    fmt.Printf("%d args: \n", len(os.Args))
-    for i, v := range os.Args {
-        fmt.Printf("%d.: %s\n", i, v)
+    filenames := make([]string, len(os.Args) -1)
+    for i := 0; i < len(os.Args) -1; i++ {
+        filenames[i] = os.Args[i+1]
     }
-    // initialize hash-func:
-    hash := sha256.New()
+    fmt.Println("Files:")
+    for i := 0; i < len(filenames); i++ {
+        fmt.Printf("%d: %s\n", i, filenames[i])
+    }
 
     // open file, exit on error:
     input_file, err := os.Open(os.Args[1])
@@ -52,8 +54,10 @@ func main() {
     // create a buffer to keep chunks that are read
     data := make([]byte, 16)
 
-    for 
-    {
+    // initialize hash-func:
+    hash := sha256.New()
+
+    for {
         // read chunks from file:
         num_bytes, err := input_file.Read(data)
         // panic on any error != io.EOF
