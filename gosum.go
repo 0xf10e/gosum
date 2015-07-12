@@ -9,8 +9,8 @@
 package main
 
 import (
-    //"crypto/md5"
-    //"crypto/sha1"
+    "crypto/md5"
+    "crypto/sha1"
     "crypto/sha256"
     "encoding/hex"
     "fmt"
@@ -25,9 +25,14 @@ type file_alg_sum struct {
 }
 
 func new_hash(alg string) hash.Hash {
-    if alg == "SHA256" {
+    switch alg {
+    case "SHA256":
         return sha256.New()
-    } else {
+    case "MD5":
+        return md5.New()
+    case "SHA1":
+        return sha1.New()
+    default:
         panic ("Unknown algorithm!")
     }
 }
@@ -82,7 +87,8 @@ func read_routine(input_file *os.File, ic chan byte) {
 func main() {   
     // filename -> algorithm -> checksum
     output_map :=  map[string]map[string]string{}
-
+    algorithms := []string{"SHA256", "SHA1", "MD5"}
+    // put filenames in 1st level of keys:
     for i := 0; i < len(os.Args) -1; i++ {
          output_map[os.Args[i+1]] = make(map[string]string)
     }
@@ -102,8 +108,10 @@ func main() {
         ic := make(chan byte, 16)
         oc := make(chan file_alg_sum, 1)
         go read_routine(input_file, ic)
-        // for alg in ALGORITHMS
-        go chan_to_hash(ic, filename, "SHA256", oc)
+        for _, alg := range algorithms {
+            go chan_to_hash(ic, filename, alg, oc)
+            break
+        }
         // for len(ALGORITHMS)
         result := <- oc
         //fmt.Printf("oc returns %s for %s of\n%s", 
