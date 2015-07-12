@@ -55,6 +55,30 @@ func chan_to_hash(ic chan byte, file string, alg string, oc chan file_alg_sum) {
     oc <- file_alg_sum{file, alg, hex.EncodeToString(hash_func.Sum(nil))}
 }
 
+func read_routine(input_file *os.File, ic chan byte) {
+    // create a buffer to keep chunks that are read
+    data := make([]byte, 16)
+
+    cnt := 0
+    for {
+        // read chunks from file:
+        num_bytes, err := input_file.Read(data)
+        // panic on any error != io.EOF
+        if err != nil && err != io.EOF { panic(err) }
+        // break loop if no more bytes:
+        if num_bytes == 0 { break }
+        // write data read to channel:
+        if cnt % 1024 == 0 {
+            fmt.Printf("main(): Sending chunk %d\n", cnt)
+        }
+        for nibble := range data {
+            ic <- byte(nibble)
+        }
+        cnt++
+    }
+    close(ic)
+}
+
 func main() {   
     // filename -> algorithm -> checksum
     output_map :=  map[string]map[string]string{}
@@ -75,35 +99,16 @@ func main() {
         // close on EOF I guess?
         defer input_file.Close()
 
-        // create a buffer to keep chunks that are read
-        data := make([]byte, 16)
-
         ic := make(chan byte, 16)
         oc := make(chan file_alg_sum, 1)
+        go read_routine(input_file, ic)
+        // for alg in ALGORITHMS
         go chan_to_hash(ic, filename, "SHA256", oc)
-        cnt := 0
-        for {
-            // read chunks from file:
-            num_bytes, err := input_file.Read(data)
-            // panic on any error != io.EOF
-            if err != nil && err != io.EOF { panic(err) }
-            // break loop if no more bytes:
-            if num_bytes == 0 { break }       
-            // write data read to channel:
-            if cnt % 1024 == 0 {
-                fmt.Printf("main(): Sending chunk %d\n", cnt)
-            }
-            for nibble := range data {
-                ic <- byte(nibble)
-            }
-            cnt++
-        }
-        close(ic)
-        for result := range oc {
-            fmt.Printf("oc returns %s for %s of\n%s", 
-                result.alg, filename, result.cksum)
-            alg_sum[result.alg] = result.cksum
-        }
+        // for len(ALGORITHMS)
+        result := <- oc
+        //fmt.Printf("oc returns %s for %s of\n%s", 
+        //        result.alg, filename, result.cksum)
+        alg_sum[result.alg] = result.cksum
     }
 
     for filename, alg_sum := range output_map {
