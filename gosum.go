@@ -1,3 +1,4 @@
+//usr/bin/env go run $0 "$@"; exit
 /*  (c) 2015 0xf10e@fsfe.org
     Licensed under Apache License 2.0 
     
@@ -35,6 +36,8 @@ func new_hash(alg string) hash.Hash {
     default:
         panic ("Unknown algorithm!")
     }
+    // make go 1.0 happy:
+    return sha1.New()
 }
 
 
