@@ -20,6 +20,7 @@ import (
     "os"
 )
 
+const chunk_size int = 32 * 4096
 
 type alg_sum struct {
     alg, cksum string
@@ -45,12 +46,12 @@ func chan_to_hash(ic chan byte, alg string, output_ch chan alg_sum) {
     hash_func := new_hash(alg)
     i := 0
     cnt := 0
-    data := make ([]byte, 16)
+    data := make ([]byte, chunk_size)
 
     for nibble := range ic {
         data[i] = nibble
         i++
-        if i == 16 {
+        if i == chunk_size {
             hash_func.Write(data)
             i = 0
         }
@@ -64,7 +65,7 @@ func chan_to_hash(ic chan byte, alg string, output_ch chan alg_sum) {
 }
 
 func hash_chan(alg string, output_ch chan alg_sum) chan byte {
-    input_chan := make(chan byte)
+    input_chan := make(chan byte, chunk_size)
     go chan_to_hash(input_chan, alg, output_ch)
     return input_chan
 }
@@ -72,10 +73,10 @@ func hash_chan(alg string, output_ch chan alg_sum) chan byte {
 func read_fan(input_file *os.File, alg_list []string,
         output_ch chan alg_sum) {
     // create a buffer to keep chunks that are read
-    data := make([]byte, 16)
+    data := make([]byte, chunk_size)
 
     // prepare a slice of channels for
-    // 16byte-chunks:
+    // (chunk_size)-chunks:
     input_channels := make([]chan byte, len(alg_list))
     //fmt.Printf("read_fan(): Made slice input_channels of len %d\n", len(input_channels))
 
@@ -134,7 +135,7 @@ func main() {
         // close on EOF I guess?
         defer input_file.Close()
 
-        output_ch := make(chan alg_sum, 3)
+        output_ch := make(chan alg_sum, len(alg_list))
         go read_fan(input_file, alg_list, output_ch)
 
         for i := 0; i < len(alg_list); i++ {
