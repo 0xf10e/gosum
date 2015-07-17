@@ -90,7 +90,7 @@ func read_routine(input_file *os.File, ic chan byte) {
 func main() {   
     // filename -> algorithm -> checksum
     output_map :=  map[string]map[string]string{}
-    algorithms := []string{"SHA256", "SHA1", "MD5"}
+    alg_list := []string{"SHA256", "SHA1", "MD5"}
     // put filenames in 1st level of keys:
     for i := 0; i < len(os.Args) -1; i++ {
          output_map[os.Args[i+1]] = make(map[string]string)
@@ -108,18 +108,14 @@ func main() {
         // close on EOF I guess?
         defer input_file.Close()
 
-        ic := make(chan byte, 16)
-        oc := make(chan file_alg_sum, 1)
-        go read_routine(input_file, ic)
-        for _, alg := range algorithms {
-            go chan_to_hash(ic, filename, alg, oc)
-            break
+        output_ch := make(chan file_alg_sum, 1)
+        go read_fan(input_file, alg_list, output_ch)
+
+        for result := range <- oc {
+              fmt.Printf("%s-checksum of %s:\n%s\n", 
+                    result.alg, result.filename, result.cksum)
+              alg_sum[result.alg] = result.cksum
         }
-        // for len(ALGORITHMS)
-        result := <- oc
-        //fmt.Printf("oc returns %s for %s of\n%s", 
-        //        result.alg, filename, result.cksum)
-        alg_sum[result.alg] = result.cksum
     }
 
     for filename, alg_sum := range output_map {
