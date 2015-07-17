@@ -15,14 +15,16 @@ architecture
 
   - for every file in argv:
 
+    - ``main()`` opens input file
     - ``main()`` creates ``output_ch``
-    - ``main()`` spawns ``read_fan(filename, alg_list, output_ch)``
-      routines
+    - ``main()`` spawns ``read_fan(filehandle, alg_list, output_ch)``
+      routine
     - ``main()`` starts listening for results on ``output_ch``
     - ``read_fan()`` calls ``hash_chan(alg, output_ch)`` for every
         algorithm: in ``alg_list``:
 
-      - every hash_chan() spawns a chan_to_hash() routine
+      - every ``hash_chan()`` spawns a ``chan_to_hash(input_chan,
+        alg, output_ch)`` routine
       - every ``hash_chan()`` returns an ``input_chan`` for its
         ``chan_to_hash()``
 

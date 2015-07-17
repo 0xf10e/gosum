@@ -54,9 +54,9 @@ func chan_to_hash(ic chan byte, alg string, output_ch chan alg_sum) {
             hash_func.Write(data)
             i = 0
         }
-        if cnt % 1024 == 0 {
-            fmt.Printf("chan_to_hash(): Wrote nibble %d\n", cnt)
-        }
+        //if cnt % 1024 == 0 {
+        //    fmt.Printf("chan_to_hash(): Wrote nibble %d\n", cnt)
+        //}
         cnt++
     }
     
@@ -76,15 +76,18 @@ func read_fan(input_file *os.File, alg_list []string,
 
     // prepare a slice of channels for
     // 16byte-chunks:
-    input_channels := make([]chan byte, 16)
+    input_channels := make([]chan byte, len(alg_list))
+    //fmt.Printf("read_fan(): Made slice input_channels of len %d\n", len(input_channels))
 
     for i, alg := range alg_list {
+        //fmt.Printf("read_fan(): calling hash_chan for alg %s\n", alg)
         input_channels[i] = hash_chan(alg, output_ch)
     }
     cnt := 0
     for {
         // read chunks from file:
         num_bytes, err := input_file.Read(data)
+        //fmt.Printf("read_fan(): read %d bytes\n", num_bytes)
 
         // panic on any error != io.EOF
         if err != nil && err != io.EOF { panic(err) }
@@ -93,10 +96,11 @@ func read_fan(input_file *os.File, alg_list []string,
         if num_bytes == 0 { break }
 
         // write data read to channel:
-        if cnt % 1024 == 0 {
-            fmt.Printf("main(): Sending chunk %d\n", cnt)
-        }
+        //if cnt % 1024 == 0 {
+        //    fmt.Printf("read_fan(): Sending chunk %d\n", cnt)
+        //}
         for _, input_chan := range input_channels {
+            //fmt.Printf("read_fan(): sending nibbles to input_channels[%d]\n", i)
             for nibble := range data {
                 input_chan <- byte(nibble)
             }
@@ -106,7 +110,6 @@ func read_fan(input_file *os.File, alg_list []string,
     for _, input_chan := range input_channels {
         close(input_chan)
     }
-    close(output_ch)
 }
 
 func main() {   
@@ -124,20 +127,23 @@ func main() {
         if err != nil {
             fmt.Println(err)
             return
-        } else {
-            fmt.Printf(" * Opened %s\n", filename)
         }
+        //else {
+        //    fmt.Printf(" * Opened %s\n", filename)
+        //}
         // close on EOF I guess?
         defer input_file.Close()
 
         output_ch := make(chan alg_sum, 3)
         go read_fan(input_file, alg_list, output_ch)
 
-        for result := range output_ch {
-              fmt.Printf("%s-checksum of %s:\n%s\n", 
+        for i := 0; i < len(alg_list); i++ {
+              result := <- output_ch
+              fmt.Printf("%s-checksum of %s:\n\t%s\n",
                     result.alg, filename, result.cksum)
               alg_sum_map[result.alg] = result.cksum
         }
+        close(output_ch)
     }
 
     for filename, alg_sum_map := range output_map {
