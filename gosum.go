@@ -21,8 +21,8 @@ import (
 )
 
 
-type file_alg_sum struct {
-    filename, alg, cksum string
+type alg_sum struct {
+    alg, cksum string
 }
 
 func new_hash(alg string) hash.Hash {
@@ -41,7 +41,7 @@ func new_hash(alg string) hash.Hash {
 }
 
 
-func chan_to_hash(ic chan byte, file string, alg string, oc chan file_alg_sum) {
+func chan_to_hash(ic chan byte, alg string, output_ch chan alg_sum) {
     hash_func := new_hash(alg)
     i := 0
     cnt := 0
@@ -60,31 +60,53 @@ func chan_to_hash(ic chan byte, file string, alg string, oc chan file_alg_sum) {
         cnt++
     }
     
-    oc <- file_alg_sum{file, alg, hex.EncodeToString(hash_func.Sum(nil))}
+    output_ch <- alg_sum{alg, hex.EncodeToString(hash_func.Sum(nil))}
 }
 
-func read_routine(input_file *os.File, ic chan byte) {
+func hash_chan(alg string, output_ch chan alg_sum) chan byte {
+    input_chan := make(chan byte)
+    go chan_to_hash(input_chan, alg, output_ch)
+    return input_chan
+}
+
+func read_fan(input_file *os.File, alg_list []string,
+        output_ch chan alg_sum) {
     // create a buffer to keep chunks that are read
     data := make([]byte, 16)
 
+    // prepare a slice of channels for
+    // 16byte-chunks:
+    input_channels := make([]chan byte, 16)
+
+    for i, alg := range alg_list {
+        input_channels[i] = hash_chan(alg, output_ch)
+    }
     cnt := 0
     for {
         // read chunks from file:
         num_bytes, err := input_file.Read(data)
+
         // panic on any error != io.EOF
         if err != nil && err != io.EOF { panic(err) }
+
         // break loop if no more bytes:
         if num_bytes == 0 { break }
+
         // write data read to channel:
         if cnt % 1024 == 0 {
             fmt.Printf("main(): Sending chunk %d\n", cnt)
         }
-        for nibble := range data {
-            ic <- byte(nibble)
+        for _, input_chan := range input_channels {
+            for nibble := range data {
+                input_chan <- byte(nibble)
+            }
         }
         cnt++
     }
-    close(ic)
+    for _, input_chan := range input_channels {
+        close(input_chan)
+    }
+    close(output_ch)
 }
 
 func main() {   
@@ -96,7 +118,7 @@ func main() {
          output_map[os.Args[i+1]] = make(map[string]string)
     }
 
-    for filename, alg_sum := range output_map {
+    for filename, alg_sum_map := range output_map {
         // open file, exit on error:
         input_file, err := os.Open(filename)
         if err != nil {
@@ -108,19 +130,19 @@ func main() {
         // close on EOF I guess?
         defer input_file.Close()
 
-        output_ch := make(chan file_alg_sum, 1)
+        output_ch := make(chan alg_sum, 3)
         go read_fan(input_file, alg_list, output_ch)
 
-        for result := range <- oc {
+        for result := range output_ch {
               fmt.Printf("%s-checksum of %s:\n%s\n", 
-                    result.alg, result.filename, result.cksum)
-              alg_sum[result.alg] = result.cksum
+                    result.alg, filename, result.cksum)
+              alg_sum_map[result.alg] = result.cksum
         }
     }
 
-    for filename, alg_sum := range output_map {
+    for filename, alg_sum_map := range output_map {
         fmt.Printf("%s: \n", filename)
-        for alg, cksum := range alg_sum {
+        for alg, cksum := range alg_sum_map {
             fmt.Printf(" - %s: %s\n", alg, cksum)
         }
     }   
