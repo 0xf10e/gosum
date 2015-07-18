@@ -10,7 +10,6 @@
 package main
 
 import (
-    "bytecount"
     "crypto/md5"
     "crypto/sha1"
     "crypto/sha256"
@@ -27,7 +26,7 @@ import (
     "runtime/pprof"
 )
 
-var alg_list = []string{"SHA256", "SHA1", "MD5", "CRC", "bytecount"}
+var alg_list = []string{"SHA256", "SHA1", "MD5", "CRC"}
 var num_threads = flag.Int("t", 1, "sets GOMAXPROCS")
 var chunk_size int
 func init() {
@@ -51,8 +50,6 @@ func new_hash(alg string) hash.Hash {
         return sha1.New()
     case "CRC":
         return crc32.NewIEEE()
-    case "bytecount":
-        return bytecount.New()
     default:
         panic ("Unknown algorithm!")
     }
