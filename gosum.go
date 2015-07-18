@@ -112,8 +112,8 @@ func read_fan(input_file *os.File, alg_list []string,
         //}
         for _, input_chan := range input_channels {
             //fmt.Printf("read_fan(): sending nibbles to input_channels[%d]\n", i)
-            // doesn't fix the cksums either :((
-            for nibble := range data[0:num_bytes] {
+            // send data, not range counter:
+            for _, nibble := range data[0:num_bytes] {
                 input_chan <- byte(nibble)
             }
         }
