@@ -152,8 +152,6 @@ func main() {
 
         for i := 0; i < len(alg_list); i++ {
               result := <- output_ch
-              fmt.Printf("%s-checksum of %s:\n\t%s\n",
-                    result.alg, filename, result.cksum)
               alg_sum_map[result.alg] = result.cksum
         }
         close(output_ch)

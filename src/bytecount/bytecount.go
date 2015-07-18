@@ -1,6 +1,6 @@
 package bytecount
 
-import "fmt"
+//import "fmt"
 
 // behaupten, dass immer 4 Byte rauskommen:
 const Size = 4
@@ -42,6 +42,6 @@ func (bc *digest) Sum(b []byte) []byte{
     ret[1] = byte(bc.counter >> 16)
     ret[2] = byte(bc.counter >> 8)
     ret[3] = byte(bc.counter)
-    fmt.Printf(" * Resulting bc.counter = %d\n", bc.counter)
+    //fmt.Printf(" * Resulting bc.counter = %d\n", bc.counter)
     return ret
 }
