@@ -15,15 +15,27 @@ import (
     "crypto/sha1"
     "crypto/sha256"
     "encoding/hex"
+    // for profiling:
+    "flag"
     "fmt"
     "hash"
     "hash/crc32"
     "io"
     "os"
+    "runtime"
+    // for profiling:
+    "runtime/pprof"
 )
 
-const chunk_size int = 32 * 4096
 var alg_list = []string{"SHA256", "SHA1", "MD5", "CRC", "bytecount"}
+var num_threads = flag.Int("t", 1, "sets GOMAXPROCS")
+var chunk_size int
+func init() {
+    flag.IntVar(&chunk_size, "s", 128 * 1024, "set chunk_size")
+}
+
+// for profiling:
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 type alg_sum struct {
     alg, cksum string
@@ -126,12 +138,24 @@ func read_fan(input_file *os.File, alg_list []string,
     }
 }
 
-func main() {   
+func main() {
+    flag.Parse()
+    runtime.GOMAXPROCS(*num_threads)
+
+    if *cpuprofile != "" {
+        f, err := os.Create(*cpuprofile)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+        pprof.StartCPUProfile(f)
+        defer pprof.StopCPUProfile()
+    }
     // filename -> algorithm -> checksum
     output_map :=  map[string]map[string]string{}
     // put filenames in 1st level of keys:
-    for i := 0; i < len(os.Args) -1; i++ {
-         output_map[os.Args[i+1]] = make(map[string]string)
+    for _, file := range flag.Args() {
+         output_map[file] = make(map[string]string)
     }
 
     for filename, alg_sum_map := range output_map {
