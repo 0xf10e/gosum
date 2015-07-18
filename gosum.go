@@ -61,34 +61,28 @@ func new_hash(alg string) hash.Hash {
 }
 
 
-func chan_to_hash(ic chan byte, alg string, output_ch chan alg_sum) {
+func chan_to_hash(ic chan int, alg string, buffer []byte, write_ok chan int,
+        output_ch chan alg_sum) {
+    // get the method for calculation
+    // given hash:
     hash_func := new_hash(alg)
-    i := 0
-    cnt := 0
-    data := make ([]byte, chunk_size)
 
-    for nibble := range ic {
-        data[i] = nibble
-        i++
-        if i == chunk_size {
-            hash_func.Write(data)
-            i = 0
-        }
-        //if cnt % 1024 == 0 {
-        //    fmt.Printf("chan_to_hash(): Wrote nibble %d\n", cnt)
-        //}
-        cnt++
-    }
-    // doesn't fix the cksums :(
-    if i != 0 {
-        hash_func.Write(data[0:i])
+    // everytime we get the number
+    // of new input bytes we add those
+    // to the hash_func:
+    for num_bytes := range ic {
+        hash_func.Write(buffer[0:num_bytes])
+        // write_ok is chan int in case we'll
+        // use more then one buffer later:
+        write_ok <- 0
     }
     output_ch <- alg_sum{alg, hex.EncodeToString(hash_func.Sum(nil))}
 }
 
-func hash_chan(alg string, output_ch chan alg_sum) chan byte {
-    input_chan := make(chan byte, chunk_size)
-    go chan_to_hash(input_chan, alg, output_ch)
+func hash_chan(alg string, buffer []byte, write_ok chan int,
+        output_ch chan alg_sum) chan int {
+    input_chan := make(chan int, 8)
+    go chan_to_hash(input_chan, alg, buffer, write_ok, output_ch)
     return input_chan
 }
 
@@ -97,16 +91,20 @@ func read_fan(input_file *os.File, alg_list []string,
     // create a buffer to keep chunks that are read
     data := make([]byte, chunk_size)
 
-    // prepare a slice of channels for
-    // (chunk_size)-chunks:
-    input_channels := make([]chan byte, len(alg_list))
-    //fmt.Printf("read_fan(): Made slice input_channels of len %d\n", len(input_channels))
+    // prepare a slice of channels for telling
+    // routines how many bytes to read:
+    input_channels := make([]chan int, len(alg_list))
+
+    // open the channel routines will use to
+    // tell when refilling the buffer is OK:
+    write_ok := make(chan int, len(alg_list))
+    // (write_ok is chan int in case we'll
+    // use more then one buffer later)
 
     for i, alg := range alg_list {
         //fmt.Printf("read_fan(): calling hash_chan for alg %s\n", alg)
-        input_channels[i] = hash_chan(alg, output_ch)
+        input_channels[i] = hash_chan(alg, data, write_ok, output_ch)
     }
-    cnt := 0
     for {
         // read chunks from file:
         num_bytes, err := input_file.Read(data)
@@ -116,26 +114,28 @@ func read_fan(input_file *os.File, alg_list []string,
         if err != nil && err != io.EOF { panic(err) }
 
         // break loop if no more bytes:
-        if num_bytes == 0 { break }
+        if num_bytes == 0 {
+            for _, input_chan := range input_channels {
+                close(input_chan)
+            }
+            break
+        }
 
         // write data read to channel:
         //if cnt % 1024 == 0 {
         //    fmt.Printf("read_fan(): Sending chunk %d\n", cnt)
         //}
         for _, input_chan := range input_channels {
-            //fmt.Printf("read_fan(): sending nibbles to input_channels[%d]\n", i)
-            // send data, not range counter:
-            for _, nibble := range data[0:num_bytes] {
-                input_chan <- byte(nibble)
-            }
+            input_chan <- num_bytes
         }
-        cnt++
+        for i := 0; i < len(alg_list); i++ {
+            // wait for every routine giving us
+            // an OK for refilling the buffer
+            <- write_ok
+        }
     }
     // expicitly closing the input file:
     input_file.Close()
-    for _, input_chan := range input_channels {
-        close(input_chan)
-    }
 }
 
 func main() {
