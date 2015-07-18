@@ -158,9 +158,8 @@ func main() {
     }
 
     for filename, alg_sum_map := range output_map {
-        fmt.Printf("%s: \n", filename)
         for alg, cksum := range alg_sum_map {
-            fmt.Printf(" - %s: %s\n", alg, cksum)
+            fmt.Printf("%s (%s) = %s\n", alg, filename, cksum)
         }
     }   
 }
