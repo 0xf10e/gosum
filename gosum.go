@@ -10,17 +10,20 @@
 package main
 
 import (
+    "bytecount"
     "crypto/md5"
     "crypto/sha1"
     "crypto/sha256"
     "encoding/hex"
     "fmt"
     "hash"
+    "hash/crc32"
     "io"
     "os"
 )
 
 const chunk_size int = 32 * 4096
+var alg_list = []string{"SHA256", "SHA1", "MD5", "CRC", "bytecount"}
 
 type alg_sum struct {
     alg, cksum string
@@ -34,6 +37,10 @@ func new_hash(alg string) hash.Hash {
         return md5.New()
     case "SHA1":
         return sha1.New()
+    case "CRC":
+        return crc32.NewIEEE()
+    case "bytecount":
+        return bytecount.New()
     default:
         panic ("Unknown algorithm!")
     }
@@ -60,7 +67,10 @@ func chan_to_hash(ic chan byte, alg string, output_ch chan alg_sum) {
         //}
         cnt++
     }
-    
+    // doesn't fix the cksums :(
+    if i != 0 {
+        hash_func.Write(data[0:i])
+    }
     output_ch <- alg_sum{alg, hex.EncodeToString(hash_func.Sum(nil))}
 }
 
@@ -102,12 +112,15 @@ func read_fan(input_file *os.File, alg_list []string,
         //}
         for _, input_chan := range input_channels {
             //fmt.Printf("read_fan(): sending nibbles to input_channels[%d]\n", i)
-            for nibble := range data {
+            // doesn't fix the cksums either :((
+            for nibble := range data[0:num_bytes] {
                 input_chan <- byte(nibble)
             }
         }
         cnt++
     }
+    // expicitly closing the input file:
+    input_file.Close()
     for _, input_chan := range input_channels {
         close(input_chan)
     }
@@ -116,7 +129,6 @@ func read_fan(input_file *os.File, alg_list []string,
 func main() {   
     // filename -> algorithm -> checksum
     output_map :=  map[string]map[string]string{}
-    alg_list := []string{"SHA256", "SHA1", "MD5"}
     // put filenames in 1st level of keys:
     for i := 0; i < len(os.Args) -1; i++ {
          output_map[os.Args[i+1]] = make(map[string]string)
